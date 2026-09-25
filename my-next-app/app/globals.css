@@ -1,8 +1,8 @@
 @import "tailwindcss";
 
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  --background: #f5f4ef;
+  --foreground: #202e29;
 }
 
 @theme inline {
@@ -15,5 +15,27 @@
 body {
   background: var(--background);
   color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  font-family: var(--font-geist-sans), Arial, Helvetica, sans-serif;
 }
+
+.shell { width: min(100% - 2rem, 680px); margin: auto; padding: 4rem 0; }
+.card { background: white; border: 1px solid #dce2db; border-radius: 24px; padding: clamp(1.5rem, 5vw, 3rem); box-shadow: 0 20px 60px #203e2910; }
+.badge { display: inline-block; color: #326048; background: #edf3eb; border-radius: 100px; padding: .4rem .8rem; font-size: .8rem; font-weight: 600; }
+h1 { font-size: clamp(2.5rem, 7vw, 3.75rem); line-height: 1.1; letter-spacing: -.045em; font-weight: 600; margin: 1.5rem 0; }
+h2 { font-size: 1.15rem; font-weight: 600; }
+p { color: #58655d; line-height: 1.7; margin: .8rem 0 1.5rem; overflow-wrap: anywhere; }
+.member-content { border-top: 1px solid #e3e8e1; margin-top: 2rem; padding-top: 2rem; }
+.button { display: inline-flex; justify-content: center; align-items: center; padding: .8rem 1.2rem; border-radius: 10px; background: #254b36; color: white; font-weight: 500; cursor: pointer; }
+.button:hover { background: #356548; }
+.secondary { background: #edf1eb; color: #254b36; }
+.secondary:hover { background: #dce6d8; }
+.actions { display: flex; flex-wrap: wrap; align-items: center; gap: .75rem; }
+.back-link { display: inline-block; margin-bottom: 1.5rem; }
+a:focus-visible, button:focus-visible { outline: 3px solid #589769; outline-offset: 4px; }
+.table-shell { width: min(100% - 2rem, 1100px); }
+.table-scroll { overflow-x: auto; }
+.table-scroll:focus-visible { outline: 3px solid #589769; outline-offset: 4px; }
+table { width: 100%; border-collapse: collapse; text-align: left; }
+caption { text-align: left; font-weight: 600; padding-bottom: 1rem; }
+th, td { padding: .85rem 1rem; border-bottom: 1px solid #dce2db; max-width: 32rem; overflow-wrap: anywhere; vertical-align: top; }
+th { background: #edf3eb; font-weight: 600; }

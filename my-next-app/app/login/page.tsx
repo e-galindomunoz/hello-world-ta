@@ -15,7 +15,7 @@ export default async function Login() {
       <section className="card">
         <span className="badge">Members only</span>
         <h1>Welcome back.</h1>
-        <p>Continue with your Google account to open your dashboard.</p>
+        <p>Continue with your Google account to view the coffee collection.</p>
         {configured ? <GoogleSignIn /> : <p role="status">Sign-in is not available yet. Please check back after setup is complete.</p>}
       </section>
     </main>

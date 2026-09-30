@@ -6,6 +6,6 @@ export const dynamic = "force-dynamic";
 
 export default async function Home() {
   const user = await getUser();
-  const configured = Boolean(getSupabaseConfig() && process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID);
+  const configured = Boolean(getSupabaseConfig());
   return <Landing signedIn={Boolean(user)} configured={configured} />;
 }

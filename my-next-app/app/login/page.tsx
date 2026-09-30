@@ -7,6 +7,6 @@ export const dynamic = "force-dynamic";
 
 export default async function Login() {
   if (await getUser()) redirect("/dashboard");
-  const configured = Boolean(getSupabaseConfig() && process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID);
+  const configured = Boolean(getSupabaseConfig());
   return <Landing configured={configured} login />;
 }

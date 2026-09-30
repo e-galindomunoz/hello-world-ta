@@ -88,6 +88,8 @@ svg { flex-shrink: 0; }
 .sign-in-panel { border-radius: 16px; margin-top: 30px; padding: 22px 24px; max-width: 365px; display: flex; flex-direction: column; align-items: flex-start; gap: 17px; }
 .sign-in-title { font-size: 13px; font-weight: 500; }
 .google-control { min-height: 40px; max-width: 100%; }
+.google-sign-in { display: inline-flex; align-items: center; justify-content: center; gap: 10px; height: 40px; max-width: 100%; padding: 0 12px; border: 1px solid #dadce0; border-radius: 4px; background: #fff; color: #3c4043; font-family: Arial, sans-serif; font-size: 14px; font-weight: 500; letter-spacing: .25px; }
+.google-sign-in:hover:not(:disabled) { background: #f8faff; border-color: #d2e3fc; }
 .google-control p:empty { display: none; }
 .google-control p { font-size: 12px; padding-top: 6px; }
 .sign-in-note { display: flex; align-items: center; gap: 6px; font-size: 10px; color: var(--muted); }

@@ -13,17 +13,22 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "hello world",
-  description: "hello world",
+  title: "LetsBeGoofy — Your personal space",
+  description: "A home for your favorite finds and a profile that feels like you.",
 };
 
 export default function RootLayout({ children }: LayoutProps<"/">) {
   return (
     <html
       lang="en"
+      data-theme="dark"
+      suppressHydrationWarning
       className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
     >
-      <body className="min-h-full flex flex-col">{children}</body>
+      <body className="min-h-full flex flex-col">
+        <script dangerouslySetInnerHTML={{ __html: `try{document.documentElement.dataset.theme=localStorage.getItem('letsbegoofy-theme')==='light'?'light':'dark'}catch(e){}` }} />
+        {children}
+      </body>
     </html>
   );
 }

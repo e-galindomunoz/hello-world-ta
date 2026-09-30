@@ -1,7 +1,10 @@
+import { Suspense } from "react";
+import Loading from "@/components/loading-state";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { createClient, getUser } from "@/lib/supabase/server";
-import { signOut } from "@/app/auth/actions";
+import { Icon } from "@/components/icons";
+import { ProfileSection } from "@/components/profile-section";
 
 export const dynamic = "force-dynamic";
 
@@ -32,28 +35,24 @@ export default async function Dashboard() {
 
   const columns = Array.from(new Set(rows.flatMap((row) => Object.keys(row))));
   return (
-    <main className="shell table-shell">
-      <Link href="/" className="back-link">← Home</Link>
-      <section className="card">
-        <span className="badge">Access granted</span>
-        <h1>Your coffee collection.</h1>
-        <p>Signed in as <strong>{user.email}</strong>.</p>
-        <form action={signOut}><button className="button secondary" type="submit">Sign out</button></form>
-        {message ? <p role="status">{message}</p> : (
-          <>
-            <p>{rows.length} {rows.length === 1 ? "row" : "rows"} shown (up to 100).</p>
-            <div className="table-scroll" tabIndex={0} role="region" aria-label="Database rows">
-              <table>
-                <caption>coffee</caption>
-                <thead><tr>{columns.map((column) => <th key={column} scope="col">{column}</th>)}</tr></thead>
-                <tbody>{rows.map((row, index) => (
-                  <tr key={index}>{columns.map((column) => <td key={column}>{displayValue(row[column])}</td>)}</tr>
-                ))}</tbody>
-              </table>
-            </div>
-          </>
+    <>
+      <header className="page-heading dashboard-heading"><div><span className="eyebrow">A LITTLE EVERYDAY DELIGHT</span><h1>Welcome to your space<span className="brand-dot">.</span></h1><p>Your favorite finds, all in one place. Make yourself at home.</p></div><Link href="/dashboard/profile" className="button secondary"><Icon name="user" /> Your profile</Link></header>
+      <Suspense fallback={<Loading />}><ProfileSection userId={user.id} email={user.email ?? ""} completionOnly /></Suspense>
+      <section className="card glass collection-card">
+        <div className="collection-header"><div className="collection-title"><span className="section-icon"><Icon name="coffee" /></span><div><h2>Your coffee collection</h2><p>A good day starts with a great roast.</p></div></div><span className="badge">{rows.length} {rows.length === 1 ? "favorite" : "favorites"}</span></div>
+        {message ? <div className="empty-state" role="status"><Icon name="coffee" /><p>{message}</p></div> : (
+          <div className="table-scroll" tabIndex={0} role="region" aria-label="Database rows">
+            <table>
+              <caption className="sr-only">Coffee collection</caption>
+              <thead><tr>{columns.map((column) => <th key={column} scope="col">{column.replaceAll("_", " ")}</th>)}</tr></thead>
+              <tbody>{rows.map((row, index) => (
+                <tr key={index}>{columns.map((column) => <td key={column}>{displayValue(row[column])}</td>)}</tr>
+              ))}</tbody>
+            </table>
+          </div>
         )}
+        <div className="collection-footer"><span>Signed in as {user.email}</span><span>Showing up to 100 entries</span></div>
       </section>
-    </main>
+    </>
   );
 }

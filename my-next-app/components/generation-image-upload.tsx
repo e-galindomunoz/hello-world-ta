@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useEffect, useRef, useState, useTransition } from "react";
 import { generateCaption } from "@/app/dashboard/generation-actions";
 import { createClient } from "@/lib/supabase/client";
@@ -102,7 +103,7 @@ export function GenerationImageUpload() {
   return (
     <section className={styles.card} aria-labelledby="generation-upload-heading">
       <h2 id="generation-upload-heading">Upload a photo</h2>
-      <p>Your photo stays private. Choose a photo from your library or take one with your phone.</p>
+      <p>Your upload stays private until you generate and save a caption. A successful generation publishes your photo and caption to the public feed.</p>
       <p id="generation-upload-help" className={styles.help}>JPEG, PNG, or WebP · Up to 5 MiB · One photo at a time</p>
 
       <input
@@ -150,7 +151,7 @@ export function GenerationImageUpload() {
       </button>
       {uploadedPath && (
         <div className={styles.generation}>
-          <p id="generation-help">Generate a funny caption. Your photo will be sent to Google Gemini, and the caption will be saved.</p>
+          <p id="generation-help">Your photo will be sent to Google Gemini. When the caption is saved, your photo and caption will be publicly visible to anyone in the feed.</p>
           <button
             type="button"
             className={styles.uploadButton}
@@ -158,18 +159,19 @@ export function GenerationImageUpload() {
             aria-describedby="generation-help"
             onClick={generate}
           >
-            {generationPending ? "Generating caption…" : generation ? "Caption saved" : "Generate caption"}
+            {generationPending ? "Generating caption…" : generation ? "Post published" : "Generate and publish"}
           </button>
         </div>
       )}
       {generation && (
         <div className={styles.caption} aria-labelledby="saved-caption-heading">
-          <h3 id="saved-caption-heading">Your caption</h3>
+          <h3 id="saved-caption-heading">Your published caption</h3>
           <p>{generation.caption}</p>
+          <Link className="button secondary" href="/feed">View public feed</Link>
         </div>
       )}
       <p role="status" aria-live="polite" aria-atomic="true" className={styles.status}>
-        {pending ? "Uploading your photo…" : generationPending ? "Generating and saving your caption…" : generation ? "Caption saved." : uploadedPath ? "Photo uploaded privately." : ""}
+        {pending ? "Uploading your photo…" : generationPending ? "Generating and publishing your post…" : generation ? "Post published to the public feed." : uploadedPath ? "Photo uploaded privately." : ""}
       </p>
       <p role="alert" aria-atomic="true" className={styles.error}>{error}</p>
     </section>

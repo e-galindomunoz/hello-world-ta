@@ -17,6 +17,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       <Link className="sidebar-brand" href="/" aria-label="LetsBeGoofy home"><BrandMark /><span className="nav-label">LetsBeGoofy<span className="brand-dot">.</span></span></Link>
       <button className="icon-button sidebar-toggle" onClick={() => setExpanded(!expanded)} aria-expanded={expanded} aria-controls="workspace-nav" aria-label={expanded ? "Collapse sidebar" : "Expand sidebar"} title={expanded ? "Collapse sidebar" : "Expand sidebar"}><Icon name="menu" /><span className="nav-label">Collapse menu</span></button>
       <nav id="workspace-nav" aria-label="Main navigation">
+        <Link href="/feed" className={`nav-item ${pathname === "/feed" ? "active" : ""}`} aria-current={pathname === "/feed" ? "page" : undefined} aria-label="Public feed" title="Public feed"><Icon name="spark" /><span className="nav-label">Public feed</span></Link>
         <Link href="/dashboard" className={`nav-item ${pathname === "/dashboard" ? "active" : ""}`} aria-current={pathname === "/dashboard" ? "page" : undefined} aria-label="Dashboard" title="Dashboard"><Icon name="grid" /><span className="nav-label">Dashboard</span></Link>
         <Link href="/dashboard/profile" className={`nav-item ${pathname === "/dashboard/profile" ? "active" : ""}`} aria-current={pathname === "/dashboard/profile" ? "page" : undefined} aria-label="Profile" title="Profile"><Icon name="user" /><span className="nav-label">Profile</span></Link>
       </nav>

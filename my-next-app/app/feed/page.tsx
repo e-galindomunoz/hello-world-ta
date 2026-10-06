@@ -10,17 +10,21 @@ import styles from "./feed.module.css";
 export const dynamic = "force-dynamic";
 export const metadata: Metadata = { title: "Public feed — LetsBeGoofy" };
 const PAGE_SIZE = 12;
-type Post = { id: string; caption: string; created_at: string };
+type Sort = "new" | "hot";
+type Post = { id: string; caption: string; created_at: string; score: number };
 
-async function loadPosts(page: number): Promise<Post[] | null> {
+function feedHref(sort: Sort, page = 1) {
+  return `/feed?sort=${sort}${page > 1 ? `&page=${page}` : ""}`;
+}
+
+async function loadPosts(page: number, sort: Sort): Promise<Post[] | null> {
   try {
     const start = (page - 1) * PAGE_SIZE;
-    const { data, error } = await createPublicClient().from("generations")
-      .select("id, caption, created_at")
-      .order("created_at", { ascending: false })
-      .order("id", { ascending: false })
-      .range(start, start + PAGE_SIZE);
-    return error ? null : data;
+    // The public RPC aggregates and orders before pagination; raw votes stay private.
+    const { data, error } = await createPublicClient()
+      .rpc("get_public_feed", { p_sort: sort, p_limit: PAGE_SIZE + 1, p_offset: start })
+      .select("id, caption, created_at, score");
+    return error || !Array.isArray(data) ? null : data;
   } catch {
     return null;
   }
@@ -29,25 +33,38 @@ async function loadPosts(page: number): Promise<Post[] | null> {
 export default async function Feed({ searchParams }: {
   searchParams: Promise<{ [key: string]: string | string[] | undefined }>;
 }) {
-  const { page: value } = await searchParams;
-  if (value !== undefined && (typeof value !== "string" || !/^[1-9][0-9]{0,5}$/.test(value))) redirect("/feed");
+  const { page: value, sort: requestedSort } = await searchParams;
+  if (requestedSort !== undefined && requestedSort !== "new" && requestedSort !== "hot") redirect("/feed?sort=new");
+  const sort: Sort = requestedSort ?? "new";
+  if (value !== undefined && (typeof value !== "string" || !/^[1-9][0-9]{0,5}$/.test(value))) redirect(feedHref(sort));
   const page = value === undefined ? 1 : Number(value);
-  const posts = await loadPosts(page);
-  if (posts === null) return <section className={styles.state} role="alert">
+  const retryHref = feedHref(sort, page);
+  const sorting = <div className={styles.sorting}>
+    <nav className={styles.sortControls} aria-label="Feed sorting">
+      {(["new", "hot"] as const).map((mode) => <Link key={mode}
+        className={styles.sortLink} href={feedHref(mode)}
+        aria-current={sort === mode ? "page" : undefined}>
+        {mode === "new" ? "New" : "Hot"}
+      </Link>)}
+    </nav>
+    <p>{sort === "new" ? "Newest posts first." : "Hot balances vote score and age: each day offsets one score point."}</p>
+  </div>;
+  const posts = await loadPosts(page, sort);
+  if (posts === null) return <>{sorting}<section className={styles.state} role="alert">
     <h2>The feed couldn’t load</h2>
     <p>Please try again in a moment.</p>
-    <a className="button secondary" href={page === 1 ? "/feed" : `/feed?page=${page}`}>Try again</a>
-  </section>;
+    <a className="button secondary" href={retryHref}>Try again</a>
+  </section></>;
 
   const hasNext = posts.length > PAGE_SIZE;
   const visiblePosts = posts.slice(0, PAGE_SIZE);
   const ownVotes = await loadOwnVotes(visiblePosts.map((post) => post.id));
-  const retryHref = page === 1 ? "/feed" : `/feed?page=${page}`;
   return <>
+    {sorting}
     {posts.length === 0 ? <section className={styles.state}>
       <h2>{page === 1 ? "The first laugh is yours" : "No posts on this page"}</h2>
-      <p>{page === 1 ? "Create a post to get the feed started." : "Head back to the latest posts."}</p>
-      <Link className="button secondary" href={page === 1 ? "/dashboard" : "/feed"}>{page === 1 ? "Create a post" : "Latest posts"}</Link>
+      <p>{page === 1 ? "Create a post to get the feed started." : "Head back to the first page."}</p>
+      <Link className="button secondary" href={page === 1 ? "/dashboard" : feedHref(sort)}>{page === 1 ? "Create a post" : "First page"}</Link>
     </section> : <div className={styles.posts}>
       {visiblePosts.map((post) => <article key={post.id} id={`post-${post.id}`} className={styles.post} aria-label="Published post">
         <FeedPostImage generationId={post.id} />
@@ -56,6 +73,7 @@ export default async function Feed({ searchParams }: {
           <time dateTime={post.created_at}>{new Intl.DateTimeFormat("en", {
             dateStyle: "medium", timeStyle: "short", timeZone: "UTC",
           }).format(new Date(post.created_at))} UTC</time>
+          <p className={styles.score}>Score: {post.score}</p>
           <FeedVoteControls
             key={`${post.id}:${ownVotes.status}:${ownVotes.status === "ready" ? ownVotes.votes[post.id] ?? "none" : "unknown"}`}
             generationId={post.id}
@@ -67,9 +85,9 @@ export default async function Feed({ searchParams }: {
       </article>)}
     </div>}
     {(page > 1 || hasNext) && <nav className={styles.pagination} aria-label="Feed pages">
-      {page > 1 && <Link className="button secondary" href={page === 2 ? "/feed" : `/feed?page=${page - 1}`}>Newer posts</Link>}
+      {page > 1 && <Link className="button secondary" href={feedHref(sort, page - 1)}>Previous</Link>}
       <span>Page {page}</span>
-      {hasNext && <Link className="button secondary" href={`/feed?page=${page + 1}`}>Older posts</Link>}
+      {hasNext && <Link className="button secondary" href={feedHref(sort, page + 1)}>Next</Link>}
     </nav>}
   </>;
 }

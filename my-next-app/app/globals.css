@@ -183,9 +183,10 @@ svg { flex-shrink: 0; }
 .section-heading p { font-size: 12px; margin-top: 6px; }
 .field { display: flex; flex-direction: column; gap: 10px; min-width: 0; }
 .field label { font-weight: 500; font-size: 12px; display: flex; align-items: center; justify-content: space-between; }
-.field input { width: 100%; min-width: 0; padding: 13px 14px; border: 1px solid var(--border); border-radius: 9px; background: var(--input); color: var(--foreground); font-size: 12px; transition: border-color .2s, box-shadow .2s; }
-.field input::placeholder { color: var(--faint); }
-.field input:focus { border-color: var(--accent); box-shadow: 0 0 0 3px #bca3f512; outline: none; }
+.field input, .field textarea { width: 100%; min-width: 0; padding: 13px 14px; border: 1px solid var(--border); border-radius: 9px; background: var(--input); color: var(--foreground); font-size: 12px; transition: border-color .2s, box-shadow .2s; }
+.field textarea { font: inherit; font-size: 16px; resize: vertical; min-height: 112px; }
+.field input::placeholder, .field textarea::placeholder { color: var(--faint); }
+.field input:focus, .field textarea:focus { border-color: var(--accent); box-shadow: 0 0 0 3px #bca3f512; outline: none; }
 .readonly-input { position: relative; }
 .readonly-input input { color: var(--muted); padding-right: 40px; background: var(--hover); cursor: default; }
 .readonly-input > svg { position: absolute; right: 15px; top: 15px; width: 13px; height: 13px; color: var(--faint); }

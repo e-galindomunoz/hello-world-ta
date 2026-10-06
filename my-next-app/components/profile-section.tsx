@@ -6,7 +6,7 @@ async function loadProfile(userId: string) {
     const supabase = await createClient();
     const { data: profile, error } = await supabase
       .from("profiles")
-      .select("id, first_name, last_name, avatar_url")
+      .select("id, first_name, last_name, avatar_url, humor_preference")
       .eq("id", userId)
       .single();
 

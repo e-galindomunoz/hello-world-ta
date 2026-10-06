@@ -4,17 +4,19 @@ import { useActionState, useEffect, useRef, useState } from "react";
 import { saveProfile } from "@/app/dashboard/profile-actions";
 import { Icon } from "@/components/icons";
 
-type Profile = { first_name: string | null; last_name: string | null; avatar_url: string | null };
+type Profile = { first_name: string | null; last_name: string | null; avatar_url: string | null; humor_preference: string | null };
 
 export function ProfileForm({ profile, email }: { profile: Profile; email: string }) {
   const [firstName, setFirstName] = useState(profile.first_name ?? "");
   const [lastName, setLastName] = useState(profile.last_name ?? "");
+  const [humorPreference, setHumorPreference] = useState(profile.humor_preference ?? "");
   const [photo, setPhoto] = useState<File | null>(null);
   const [preview, setPreview] = useState<string | null>(null);
   const [feedback, setFeedback] = useState<{ message: string; error: boolean } | null>(null);
   const fileInput = useRef<HTMLInputElement>(null);
   useEffect(() => () => { if (preview) URL.revokeObjectURL(preview); }, [preview]);
-  const dirty = firstName !== (profile.first_name ?? "") || lastName !== (profile.last_name ?? "") || photo !== null;
+  const dirty = firstName !== (profile.first_name ?? "") || lastName !== (profile.last_name ?? "")
+    || humorPreference !== (profile.humor_preference ?? "") || photo !== null;
   const [, formAction, pending] = useActionState(async (_state: null, data: FormData) => {
     // Keep the selected image available for a retry if the form resets after an error.
     if (photo) data.set("avatar", photo);
@@ -26,6 +28,7 @@ export function ProfileForm({ profile, email }: { profile: Profile; email: strin
       if (success) {
         setFirstName(String(data.get("first_name")).trim());
         setLastName(String(data.get("last_name")).trim());
+        setHumorPreference(String(data.get("humor_preference")).trim());
         setPhoto(null);
         setPreview(null);
         if (fileInput.current) fileInput.current.value = "";
@@ -39,6 +42,7 @@ export function ProfileForm({ profile, email }: { profile: Profile; email: strin
   function discard() {
     setFirstName(profile.first_name ?? "");
     setLastName(profile.last_name ?? "");
+    setHumorPreference(profile.humor_preference ?? "");
     setPhoto(null);
     setPreview(null);
     setFeedback(null);
@@ -71,6 +75,15 @@ export function ProfileForm({ profile, email }: { profile: Profile; email: strin
       <div className="profile-fields"><div className="section-heading"><h2>Personal information</h2><p>The details that make this space yours.</p></div>
         <div className="field"><label htmlFor="profile-email">Email address <span className="readonly-badge"><Icon name="lock" /> Read only</span></label><div className="readonly-input"><input id="profile-email" type="email" value={email} readOnly aria-describedby="email-help" /><Icon name="lock" /></div><p id="email-help" className="field-help">Connected to your Google account. Your email can’t be edited here.</p></div>
         <div className="name-fields"><div className="field"><label htmlFor="first-name">First name</label><input id="first-name" name="first_name" autoComplete="given-name" required value={firstName} placeholder="Your first name" onChange={(event) => { setFirstName(event.target.value); setFeedback(null); }} disabled={pending} /></div><div className="field"><label htmlFor="last-name">Last name</label><input id="last-name" name="last_name" autoComplete="family-name" required value={lastName} placeholder="Your last name" onChange={(event) => { setLastName(event.target.value); setFeedback(null); }} disabled={pending} /></div></div>
+        <div className="field">
+          <label htmlFor="humor-preference">What makes you laugh? <span className="muted">(optional)</span></label>
+          <textarea id="humor-preference" name="humor_preference" rows={4} maxLength={500}
+            value={humorPreference} disabled={pending} aria-describedby="humor-help humor-length"
+            placeholder="Dry jokes, absurdity, bread falling…"
+            onChange={(event) => { setHumorPreference(event.target.value); setFeedback(null); }} />
+          <p id="humor-help" className="field-help">Sent to Google Gemini when generating captions. Leave blank for the default style. Avoid including sensitive information.</p>
+          <p id="humor-length" className="field-help">{humorPreference.length} / 500 characters</p>
+        </div>
         <div className="profile-tip"><span className="tip-icon"><Icon name="spark" /></span><div><strong>A little more you.</strong><p>A familiar name and photo make your space feel like home.</p></div></div>
       </div>
     </div>

@@ -1,11 +1,16 @@
 "use server";
 
 import { createClient } from "@/lib/supabase/server";
-import { CAPTION_PROMPT, generateImageCaption, GeminiCaptionError } from "@/lib/gemini";
+import { buildCaptionPrompt, generateImageCaption, GeminiCaptionError } from "@/lib/gemini";
+import { loadDailyGenerationStatus, readDailyGenerationStatus, type DailyGenerationStatus } from "@/lib/supabase/generation-limit";
 
 type GenerationResult =
-  | { ok: true; generation: { id: string; caption: string } }
-  | { ok: false; message: string };
+  | { ok: true; generation: { id: string; caption: string }; dailyStatus: DailyGenerationStatus }
+  | { ok: false; message: string; code?: "daily_limit"; dailyStatus?: DailyGenerationStatus };
+
+export async function checkGenerationAvailability(): Promise<DailyGenerationStatus> {
+  return loadDailyGenerationStatus();
+}
 
 const MAX_IMAGE_BYTES = 5 * 1024 * 1024;
 const FILE_NAME = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}\.(jpg|png|webp)$/i;
@@ -23,7 +28,7 @@ export async function generateCaption(imagePath: unknown): Promise<GenerationRes
     const supabase = await createClient();
     const { data: { user }, error: authError } = await supabase.auth.getUser();
     if (authError || !user) {
-      return { ok: false, message: "Your session has expired. Sign in again before generating a caption." };
+      return { ok: false, message: "Your session has expired. Sign in again before generating a caption.", dailyStatus: { state: "unknown" } };
     }
 
     if (typeof imagePath !== "string" || imagePath.length > 128) {
@@ -33,6 +38,23 @@ export async function generateCaption(imagePath: unknown): Promise<GenerationRes
     if (segments.length !== 2 || segments[0] !== user.id || !FILE_NAME.test(segments[1])) {
       return { ok: false, message: "Invalid photo path. Upload a photo from your account first." };
     }
+
+    stage = "daily availability";
+    const dailyStatus = await readDailyGenerationStatus(supabase);
+    if (dailyStatus.state === "unknown") {
+      return { ok: false, message: "Unable to check today's availability. Check availability before trying again.", dailyStatus };
+    }
+    if (dailyStatus.used) {
+      return { ok: false, code: "daily_limit", message: "Today's generation is already used. It resets at midnight New York time.", dailyStatus };
+    }
+
+    stage = "humor preference";
+    const { data: profile, error: profileError } = await supabase.from("profiles")
+      .select("humor_preference").eq("id", user.id).single();
+    if (profileError || !profile || (profile.humor_preference !== null && typeof profile.humor_preference !== "string")) {
+      return { ok: false, message: "Unable to load your humor preference. Please try again. Your daily generation has not been used." };
+    }
+    const prompt = buildCaptionPrompt(profile.humor_preference);
 
     stage = "download";
     // Download under the caller's session; Storage RLS remains authoritative.
@@ -55,26 +77,31 @@ export async function generateCaption(imagePath: unknown): Promise<GenerationRes
     }
 
     stage = "generation";
-    const caption = await generateImageCaption(bytes, mimeType);
+    const caption = await generateImageCaption(bytes, mimeType, prompt);
 
     stage = "save";
     // Never insert a placeholder. This exact prompt was sent to Gemini.
     const { data: generation, error: insertError } = await supabase
       .from("generations")
-      .insert({ user_id: user.id, image_path: imagePath, prompt: CAPTION_PROMPT, caption })
+      .insert({ user_id: user.id, image_path: imagePath, prompt, caption })
       .select("id, caption")
       .single();
     if (insertError || !generation) {
+      if (insertError?.code === "P0001" && insertError.message === "daily_generation_limit_reached") {
+        return { ok: false, code: "daily_limit", message: "Another request used today's generation. Check availability for the next reset.", dailyStatus: await readDailyGenerationStatus(supabase) };
+      }
       console.error("Caption save failed", { code: insertError?.code });
-      return { ok: false, message: "Gemini produced a caption, but saving could not be confirmed. Retrying generates a new caption and may create another saved result." };
+      return { ok: false, message: "Gemini produced a caption, but saving could not be confirmed. Check availability before trying again.", dailyStatus: { state: "unknown" } };
     }
-    return { ok: true, generation: { id: generation.id, caption: generation.caption } };
+    // Re-read after commit, including requests that crossed New York midnight.
+    return { ok: true, generation: { id: generation.id, caption: generation.caption }, dailyStatus: await readDailyGenerationStatus(supabase) };
   } catch (error) {
     if (error instanceof GeminiCaptionError) return { ok: false, message: error.message };
     // Do not log SDK errors, credentials, sessions, image bytes, or prompt data.
     console.error("Caption action failed", { stage, type: error instanceof Error ? error.name : typeof error });
     return { ok: false, message: stage === "save"
-      ? "Saving could not be confirmed. Retrying generates a new caption and may create another saved result."
-      : "Unable to generate a caption right now. Your uploaded photo is still available; please try again." };
+      ? "Saving could not be confirmed. Check availability before trying again."
+      : "Unable to generate a caption right now. Your uploaded photo is still available; please try again.",
+      dailyStatus: { state: "unknown" } };
   }
 }

@@ -11,7 +11,7 @@ export default async function FeedLayout({ children }: { children: React.ReactNo
     <div className={styles.heading}>
       <span className="eyebrow">A LITTLE EVERYDAY GOOFY</span>
       <h1>The feed<span className="brand-dot">.</span></h1>
-      <p>Fresh photos. Funny captions. Newest first.</p>
+      <p>Fresh photos. Funny captions. Find your next laugh.</p>
     </div>
     {children}
   </>;

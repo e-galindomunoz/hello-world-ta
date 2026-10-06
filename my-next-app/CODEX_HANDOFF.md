@@ -6,7 +6,9 @@ Phase 1 — Foundation / Supabase / RLS ✅
 Phase 2 — Private image upload ✅
 Phase 3 — Gemini caption generation ✅
 Phase 4 — Public feed implemented; not deployed
-Phase 5 — Own-vote controls implemented; not deployed
+Phase 5 — Own-vote controls implemented and live-verified
+Phase 6 — Public aggregate scores and New/Hot UI implemented
+Phase 7 — Humor preference and daily-generation application flow implemented
 
 ## Stack
 
@@ -52,7 +54,7 @@ RLS / privileges:
 - primary key (generation_id, user_id)
 
 Raw votes are private.
-Public aggregate vote scores will be implemented later.
+Public aggregate scores are available through get_public_feed once its SQL is applied manually. Raw votes remain private.
 
 ## Storage
 
@@ -176,9 +178,8 @@ integration verification from lint/type checks. No deployment performed.
   (23505) gets exactly one value-only UPDATE retry. No upsert is used.
 - Lookups, updates, and deletes filter by both generation_id and session-derived
   user_id. The existing composite primary key still enforces one vote per user/post.
-- Temporary server diagnostics remain for live verification; remove after the
-  least-privilege fix is verified. Supabase error logs contain only operation,
-  code, and message, never full error objects or session/vote data.
+- The least-privilege mutation fix passed live verification; temporary diagnostics
+  were removed. Production error handling remains intact.
 - Feed queries remain public and unchanged. Authenticated viewers' own votes
   are loaded in one batched server query selecting generation_id, value only.
 - Anonymous viewers never query votes. Controls prompt them to sign in at /login;
@@ -193,3 +194,80 @@ integration verification from lint/type checks. No deployment performed.
   must provide a separately reviewed aggregate interface without exposing raw votes.
 - Live grants, foreign keys, cross-user denial, and browser interaction should be
   verified before release; mocked checks do not certify the deployed database.
+
+
+## Phase 6 public scores and sorting
+
+Apply the reviewed supabase/public-feed.sql manually before using this phase.
+The application does not execute SQL setup or change existing grants/RLS.
+The SQL file uses CREATE FUNCTION for initial installation; do not rerun it if
+this same RPC has already been installed. Live installation is not verified here.
+
+- The public anonymous client calls public.get_public_feed with p_sort, p_limit,
+  and p_offset, explicitly selecting id, caption, created_at, score only.
+- /feed defaults to New. Explicit modes are /feed?sort=new and /feed?sort=hot.
+- New orders by created_at DESC, id DESC. Hot orders by score minus age in days,
+  with age floored at zero, then created_at DESC, id DESC. SQL orders before paging.
+- Switching mode resets to page 1. Previous/Next and retry links retain the mode.
+- Pages show 12 posts; the RPC returns up to 13 to detect another page.
+- Score is SUM(value), or zero for an unvoted post. No vote-count breakdown.
+- Own-vote loading stays separate, authenticated, batched, and filtered by owner.
+- Confirmed-state mutation behavior is unchanged. Existing revalidatePath('/feed')
+  refreshes aggregate scores and can move posts in Hot order after a vote.
+- RPC failures display a feed error, never fabricated zero scores. Sorting stays
+  available in query-error and empty states. Offset pages may shift as data changes.
+
+Security: the read-only SECURITY DEFINER RPC deliberately reads all votes under
+its trusted postgres owner, with an empty search_path and fully qualified tables.
+Only its fixed aggregate output is public. It returns no voter IDs, individual
+votes, prompt, or creator data. Existing votes RLS and UPDATE(value)-only grants
+remain unchanged. There are no privileged application credentials.
+
+The RPC assumes every generation is publicly visible. It bypasses generation
+RLS as its owner, so revise its publication predicate before adding drafts,
+private generations, or moderation. Public score changes can reveal voting
+activity by inference, particularly on low-activity posts.
+
+No automated database changes or deployment were performed. Verify live RPC
+permissions/results, raw-vote privacy, score refresh, and New/Hot behavior after
+manual SQL installation. Earlier Phase 4/5 sections describe those phases;
+Phase 6 replaces the direct public generation query and adds Hot sorting.
+
+
+## Phase 7 humor preference and daily allowance
+
+The user applied the reviewed migration manually in Supabase before this code.
+No application-side migration or database changes are performed.
+
+- profiles.humor_preference is optional nullable text, limited to 500 characters.
+  The existing own-profile form trims it and saves blank as NULL. It participates
+  in Save/Discard/dirty state but does not affect profile completeness.
+- The generation action loads the saved preference through the authenticated
+  client, never from a client override. A profile-read failure stops generation.
+- Blank preferences use the original CAPTION_PROMPT verbatim. Otherwise the
+  approved personalized prompt includes JSON.stringify(trimmedPreference) as
+  untrusted style inspiration. The string is built once, passed to Gemini, and
+  saved unchanged in generations.prompt. Preferences/prompts are never logged.
+- The dashboard loads get_daily_generation_status() server-side. The generation
+  action independently authenticates and rechecks that RPC before downloading
+  the image or contacting Gemini. Unknown status blocks generation, not uploads.
+- The private generation_daily_usage table and transactional AFTER INSERT trigger
+  enforce one committed generation per user per America/New_York calendar day.
+  No application code writes usage rows. Failed Gemini requests or rolled-back
+  saves do not consume usage; deleting a generation does not restore usage.
+- The trigger's P0001 / daily_generation_limit_reached response is recognized
+  separately from other save failures, including simultaneous submissions.
+- Database generation_day/resets_at are authoritative. The UI formats resets_at
+  in America/New_York using the named timezone (DST-aware), never computes a day
+  or reset from the browser clock. Check availability refreshes without dropping
+  the selected/uploaded image and is available after the next midnight.
+- After a successful save, availability is read again. If that read fails, the
+  saved caption is still shown, but availability remains unknown until checked.
+  Lost/ambiguous save responses also require a fresh availability check.
+- Concurrent requests may both reach Gemini, but only one save per day commits.
+- Feed, New/Hot, voting, publication/signing, RLS, and Gemini model remain unchanged.
+  No feedback learning, visual redesign, or deployment is included.
+
+Validation must distinguish mocked application checks from live database/provider
+verification. Exercise available/used/unknown states, Gemini failures, save races,
+profile normalization, and New York midnight/DST reset display before release.

@@ -12,6 +12,8 @@
 }
 
 .help { font-size: 13px; }
+.help a { color: var(--accent); text-decoration: underline; }
+.availability { display: grid; gap: 12px; padding: 16px; border: 1px solid var(--border); border-radius: 12px; }
 
 .hiddenInput {
   position: absolute;

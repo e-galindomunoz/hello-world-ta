@@ -10,6 +10,11 @@ export async function saveProfile(_previousState: { message: string }, formData:
     return { message: "Enter both your first and last name." };
   }
 
+  const humorPreference = formData.get("humor_preference");
+  if (typeof humorPreference !== "string" || humorPreference.trim().length > 500) {
+    return { message: "Describe your humor in 500 characters or fewer." };
+  }
+
   const photo = formData.get("avatar");
   const extensions: Record<string, string> = { "image/jpeg": "jpg", "image/png": "png", "image/webp": "webp" };
   if (photo instanceof File && photo.size > 0 && (!extensions[photo.type] || photo.size > 5 * 1024 * 1024)) {
@@ -22,9 +27,10 @@ export async function saveProfile(_previousState: { message: string }, formData:
     const { data: { user }, error: authError } = await supabase.auth.getUser();
     if (authError || !user) return { message: "Your session has expired. Please sign in again." };
 
-    const values: { first_name: string; last_name: string; avatar_url?: string } = {
+    const values: { first_name: string; last_name: string; humor_preference: string | null; avatar_url?: string } = {
       first_name: firstName.trim(),
       last_name: lastName.trim(),
+      humor_preference: humorPreference.trim() || null,
     };
 
     if (photo instanceof File && photo.size > 0) {

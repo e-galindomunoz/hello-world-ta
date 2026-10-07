@@ -1,7 +1,7 @@
 "use server";
 
 import { createClient } from "@/lib/supabase/server";
-import { buildCaptionPrompt, generateImageCaption, GeminiCaptionError } from "@/lib/gemini";
+import { buildCaptionPrompt, generateImageCaption, GeminiCaptionError, type FeedbackExamples } from "@/lib/gemini";
 import { loadDailyGenerationStatus, readDailyGenerationStatus, type DailyGenerationStatus } from "@/lib/supabase/generation-limit";
 
 type GenerationResult =
@@ -54,7 +54,37 @@ export async function generateCaption(imagePath: unknown): Promise<GenerationRes
     if (profileError || !profile || (profile.humor_preference !== null && typeof profile.humor_preference !== "string")) {
       return { ok: false, message: "Unable to load your humor preference. Please try again. Your daily generation has not been used." };
     }
-    const prompt = buildCaptionPrompt(profile.humor_preference);
+    // Best-effort: load recent feedback for prompt personalization.
+    // A load failure must never block an otherwise valid generation.
+    let feedbackExamples: FeedbackExamples | undefined;
+    try {
+      const { data: rows, error: feedbackError } = await supabase
+        .from("creator_feedback")
+        .select("rating, generations(caption)")
+        .eq("user_id", user.id)
+        .order("updated_at", { ascending: false })
+        .limit(10);
+      if (feedbackError) {
+        console.error("Feedback history load failed", { code: feedbackError.code });
+      } else if (Array.isArray(rows)) {
+        const liked: string[] = [];
+        const disliked: string[] = [];
+        for (const row of rows) {
+          // PostgREST may type the embedded resource as an array or single object
+          // depending on whether the client has generated types; handle both at runtime.
+          const gen = row.generations as { caption?: unknown }[] | { caption?: unknown } | null;
+          const rawCaption = Array.isArray(gen) ? gen[0]?.caption : gen?.caption;
+          const caption = typeof rawCaption === "string" ? rawCaption : null;
+          if (!caption) continue;
+          if (row.rating === 1 && liked.length < 3) liked.push(caption);
+          else if (row.rating === -1 && disliked.length < 2) disliked.push(caption);
+        }
+        if (liked.length > 0 || disliked.length > 0) feedbackExamples = { liked, disliked };
+      }
+    } catch {
+      // Feedback load failure must never block generation.
+    }
+    const prompt = buildCaptionPrompt(profile.humor_preference, feedbackExamples);
 
     stage = "download";
     // Download under the caller's session; Storage RLS remains authoritative.

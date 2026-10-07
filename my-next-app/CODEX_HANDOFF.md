@@ -5,10 +5,13 @@
 Phase 1 — Foundation / Supabase / RLS ✅
 Phase 2 — Private image upload ✅
 Phase 3 — Gemini caption generation ✅
-Phase 4 — Public feed implemented; not deployed
-Phase 5 — Own-vote controls implemented and live-verified
-Phase 6 — Public aggregate scores and New/Hot UI implemented
-Phase 7 — Humor preference and daily-generation application flow implemented
+Phase 4 — Public feed ✅
+Phase 5 — Own-vote controls ✅
+Phase 6 — Public aggregate scores + New/Hot sorting ✅
+Phase 7 — Humor preference + daily generation limit ✅
+Phase 8 — Creator feedback / humor learning ✅
+Phase 9 — Product / mobile visual redesign ⏳
+Phase 10 — Final compliance / deployment ⏳
 
 ## Stack
 
@@ -250,7 +253,7 @@ No application-side migration or database changes are performed.
   saved unchanged in generations.prompt. Preferences/prompts are never logged.
 - The dashboard loads get_daily_generation_status() server-side. The generation
   action independently authenticates and rechecks that RPC before downloading
-  the image or contacting Gemini. Unknown status blocks generation, not uploads.
+  the image or contacting Gemini. Unknown status blocks generation.
 - The private generation_daily_usage table and transactional AFTER INSERT trigger
   enforce one committed generation per user per America/New_York calendar day.
   No application code writes usage rows. Failed Gemini requests or rolled-back
@@ -259,8 +262,13 @@ No application-side migration or database changes are performed.
   separately from other save failures, including simultaneous submissions.
 - Database generation_day/resets_at are authoritative. The UI formats resets_at
   in America/New_York using the named timezone (DST-aware), never computes a day
-  or reset from the browser clock. Check availability refreshes without dropping
-  the selected/uploaded image and is available after the next midnight.
+  or reset from the browser clock. While status is unknown, Check availability
+  refreshes without dropping the selected/uploaded image.
+- Once today's generation is used, the create screen intentionally hides the
+  photo picker and shows the daily-limit state (Phase 9) so users are not invited
+  to upload a photo they cannot caption today. Storage policies still permit
+  owner uploads; this is a product-UI choice, not a database rule. Check again
+  is available on the limit screen after the reset.
 - After a successful save, availability is read again. If that read fails, the
   saved caption is still shown, but availability remains unknown until checked.
   Lost/ambiguous save responses also require a fresh availability check.
@@ -271,3 +279,113 @@ No application-side migration or database changes are performed.
 Validation must distinguish mocked application checks from live database/provider
 verification. Exercise available/used/unknown states, Gemini failures, save races,
 profile normalization, and New York midnight/DST reset display before release.
+
+
+## Phase 8 creator feedback and humor learning
+
+The user applied the reviewed creator_feedback migration manually in Supabase before this code.
+No application-side migration or database changes are performed.
+
+### creator_feedback table
+
+- generation_id uuid PRIMARY KEY REFERENCES generations(id) ON DELETE CASCADE
+- user_id uuid NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE
+- rating smallint NOT NULL CHECK (rating IN (-1, 1))
+- created_at timestamptz NOT NULL DEFAULT now()
+- updated_at timestamptz NOT NULL DEFAULT now(), set by BEFORE UPDATE trigger
+
+RLS: owner-only SELECT / INSERT / UPDATE / DELETE.
+INSERT policy includes an EXISTS subquery verifying generation ownership.
+Column-level grants: INSERT on (generation_id, user_id, rating); UPDATE on (rating) only.
+No anon or public access.
+
+### Feedback submission
+
+app/dashboard/feedback-actions.ts exports submitCreatorFeedback(generationId, rating).
+- rating: 1, -1, or null. null deletes the feedback row.
+- Auth derived from session only; user_id never accepted from client.
+- INSERT + 23505-retry UPDATE pattern matching setVote.
+- Returns ok/uncertain/unavailable. Uncertain sets needsReload in the UI.
+- Dashboard GenerationImageUpload shows thumbs buttons after a successful caption save.
+- Clicking the currently selected rating sends null (delete). Changing rating sends the new value.
+- Confirmed state is only updated after a confirmed server response.
+
+### Humor learning: feedback examples in prompt
+
+generation-actions.ts performs a best-effort feedback fetch between humor preference
+load and image download:
+
+- Queries creator_feedback joined to generations(caption) via PostgREST embedded resource.
+- Authenticated client; RLS restricts to own rows. Explicit user_id filter enables the
+  (user_id, updated_at DESC) index.
+- ORDER BY updated_at DESC LIMIT 10. Up to 3 liked (rating=1) and 2 disliked (rating=-1)
+  examples are extracted from the result.
+- A load failure logs the error code and continues with feedbackExamples = undefined.
+  A feedback load failure never blocks generation.
+
+lib/gemini.ts buildCaptionPrompt(preference, examples?) implements three-way fallback:
+1. No preference + no examples → exact original CAPTION_PROMPT, unchanged.
+2. Preference only, no examples → exact Phase 7 personalized prompt, unchanged.
+3. At least one example → Phase 8 prompt: base instructions, optional preference block,
+   liked examples block, disliked examples block, closing guardrails.
+   Each example is JSON.stringify-wrapped and sliced to 300 characters before inclusion.
+
+The exact prompt string is built once, passed to Gemini, and saved in generations.prompt.
+Feedback examples are never accepted from the client; they are always loaded server-side.
+
+Feed, New/Hot, voting, publication/signing, RLS, daily limit enforcement, Gemini model,
+storage policies, and profile form remain unchanged. No visual redesign.
+
+
+## iPhone HEIC/HEIF uploads
+
+Client-side only. No schema, RLS, Storage policy, auth, server action, Gemini,
+or avatar ownership changes. Details are in README "iPhone photo uploads".
+
+- lib/image-upload.ts prepareImageUpload() is shared by the generation picker
+  (components/generation-image-upload.tsx) and the avatar picker
+  (components/profile-form.tsx); both use IMAGE_UPLOAD_ACCEPT.
+- HEIC/HEIF (sniffed by ftyp brand, MIME, or extension) → full-resolution JPEG,
+  quality 0.9. Native createImageBitmap(imageOrientation: "from-image") first;
+  lazy heic-to/csp fallback. JPEG/PNG/WebP pass through without re-encoding.
+- Size limits apply to the prepared file: generation photos 5 MiB (direct
+  browser → Storage upload); avatars 4 MiB (MAX_AVATAR_UPLOAD_BYTES), enforced
+  in the picker and again in saveProfile, because the avatar travels through a
+  Server Action and Vercel Functions reject request bodies above ~4.5 MB. Both
+  sides use AVATAR_TOO_LARGE_MESSAGE. Pending or failed preparation blocks
+  upload/save. The avatar input has no form name; only the prepared File is sent.
+- Server-side MIME/size checks are unchanged, so a raw HEIC is still rejected
+  by saveProfile and by the generation-images bucket rules.
+
+Automated (mocked decoder, no browser/network):
+`node --test tests/image-upload.test.mjs tests/ui-interactions.test.mjs`
+covers helper policy plus integration through the real helper for both pickers
+(HEIC → uploaded/saved JPEG, PNG passthrough, unsupported rejection).
+
+### Real-device verification (not yet performed)
+
+Use real iPhone HEIC/HEIF originals (portrait, landscape, upside-down,
+front-camera selfie, an edited photo, and one > 5 MiB source) from Photos and
+Files on iPhone Safari; repeat with transferred originals on desktop Chrome or
+Firefox to exercise the heic-to fallback.
+
+Generation flow (/dashboard):
+- [ ] Preview renders after "Preparing your photo…"
+- [ ] Preview orientation matches the Photos app (not rotated or mirrored twice)
+- [ ] "Upload this one" succeeds; request is `<uid>/<uuid>.jpg`, `Content-Type: image/jpeg`
+- [ ] "Caption & post" succeeds: Gemini caption shown, generations row saved
+- [ ] /feed renders the image with correct orientation, including after reload
+- [ ] Stored object in generation-images is `.jpg`, `image/jpeg`, and starts with
+      bytes `FF D8 FF` (download it and check with `file` or `xxd | head -1`)
+
+Avatar flow (/dashboard/profile):
+- [ ] Preview renders with correct orientation; "Save Changes" disabled while preparing
+- [ ] Save succeeds with "Profile saved."
+- [ ] Avatar renders correctly on the profile page after a hard reload and in a
+      fresh session (profile-form is currently the only avatar render site)
+- [ ] Stored object in avatars is `.jpg`, `image/jpeg`, JPEG magic bytes, never
+      raw HEIC/HEIF; profiles.avatar_url points to that `.jpg`
+
+Regression: JPEG/PNG/WebP still upload unchanged in both flows; a corrupt HEIC
+shows the conversion error and uploads nothing; a converted JPEG > 5 MiB
+(generation) or > 4 MiB (avatar) is rejected with the size message.

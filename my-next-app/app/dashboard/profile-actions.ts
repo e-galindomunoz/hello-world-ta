@@ -2,6 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
+import { AVATAR_TOO_LARGE_MESSAGE, MAX_AVATAR_UPLOAD_BYTES } from "@/lib/image-upload";
 
 export async function saveProfile(_previousState: { message: string }, formData: FormData) {
   const firstName = formData.get("first_name");
@@ -17,8 +18,9 @@ export async function saveProfile(_previousState: { message: string }, formData:
 
   const photo = formData.get("avatar");
   const extensions: Record<string, string> = { "image/jpeg": "jpg", "image/png": "png", "image/webp": "webp" };
-  if (photo instanceof File && photo.size > 0 && (!extensions[photo.type] || photo.size > 5 * 1024 * 1024)) {
-    return { message: "Choose a JPEG, PNG, or WebP image no larger than 5 MB." };
+  if (photo instanceof File && photo.size > 0) {
+    if (!extensions[photo.type]) return { message: "Choose a JPEG, PNG, or WebP image." };
+    if (photo.size > MAX_AVATAR_UPLOAD_BYTES) return { message: AVATAR_TOO_LARGE_MESSAGE };
   }
 
   try {

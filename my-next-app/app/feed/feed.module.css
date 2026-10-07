@@ -1,24 +1,68 @@
-.shell { width: min(960px, 100% - 32px); margin: 0 auto; padding-bottom: 48px; }
-.header { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 16px; padding: 20px 0; border-bottom: 1px solid var(--border); }
+.shell { width: min(1680px, 100% - 64px); margin: 0 auto; padding-bottom: 48px; }
+.header { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 16px; padding: 20px 0; }
 .navigation { display: flex; align-items: center; gap: 12px; }
-.main { width: 100%; max-width: 640px; margin: 0 auto; }
-.heading { display: grid; gap: 16px; padding: 36px 0; }
-.heading h1 { font-size: clamp(40px, 9vw, 60px); }
-.posts { display: grid; grid-template-columns: minmax(0, 1fr); gap: 24px; }
-.post { min-width: 0; overflow: hidden; border: 1px solid var(--border); border-radius: 18px; background: var(--panel); }
-.image { background: var(--input); min-height: 180px; }
-.image img { display: block; width: 100%; height: auto; max-height: 640px; object-fit: contain; }
-.imageFailure { display: grid; justify-items: center; align-content: center; gap: 16px; min-height: 220px; padding: 24px; }
-.postBody { display: grid; gap: 16px; padding: clamp(18px, 4vw, 28px); }
-.caption { color: var(--foreground); white-space: pre-wrap; overflow-wrap: anywhere; font-size: 17px; }
-.postBody time { color: var(--muted); font-size: 12px; }
-.state { display: grid; justify-items: start; gap: 16px; padding: 24px; border: 1px solid var(--border); border-radius: 18px; background: var(--panel); }
-.skeleton { width: 100%; height: 220px; background: var(--hover); border-radius: 12px; }
-.pagination { display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: 16px; margin-top: 28px; }
-.pagination span { color: var(--muted); font-size: 13px; }
-.sorting { display: grid; gap: 12px; margin-bottom: 24px; }
-.sorting p { font-size: 13px; }
-.sortControls { display: flex; flex-wrap: wrap; gap: 12px; }
-.sortLink { display: inline-flex; align-items: center; justify-content: center; min-width: 64px; min-height: 44px; padding: 10px 18px; border: 1px solid var(--border); border-radius: 10px; background: var(--hover); }
-.sortLink[aria-current="page"] { border: 2px solid var(--accent); padding: 9px 17px; font-weight: 600; text-decoration: underline; text-underline-offset: 4px; }
-.score { color: var(--foreground); font-weight: 600; font-variant-numeric: tabular-nums; }
+.navigation :global(.icon-button) { width: auto; flex-shrink: 0; }
+.main { width: 100%; }
+.heading { display: grid; gap: 10px; padding: 12px 0 24px; }
+.heading h1 { font-size: clamp(30px, 3.6vw, 54px); max-width: 900px; font-weight: 800; }
+.heading p { font-size: 15px; }
+.sorting { margin-bottom: 26px; display: flex; align-items: center; gap: 16px; flex-wrap: wrap; }
+.sortControls { display: inline-flex; gap: 4px; padding: 5px; border-radius: 18px; background: var(--surface-2); }
+.sortLink { display: inline-flex; align-items: center; justify-content: center; min-height: 44px; padding: 0 24px; border-radius: 14px; font-size: 14px; font-weight: 700; color: var(--muted); transition: background .18s, color .18s, transform .18s; }
+.sortLink:hover { color: var(--fg); }
+.sortLink:active { transform: scale(.94); }
+.sortLink[aria-current="page"] { color: var(--accent-ink); background: var(--accent); box-shadow: 0 3px 0 var(--accent-shadow); }
+.sortDesc { font-size: 13px; color: var(--muted); }
+/* Column flow retains ranked DOM order: top to bottom, then the next column.
+   Intrinsic image sizing avoids cropping and needs no image dimension metadata. */
+.posts {
+  --density-columns: 4;
+  --viewport-columns: 4;
+  column-count: min(var(--density-columns), var(--viewport-columns));
+  column-gap: 22px;
+  margin-inline: auto;
+}
+/* Density follows the visible page, so sparse feeds stay substantial.
+   The viewport cap still limits columns on smaller screens. */
+.posts:not(:has(> .post:nth-child(9))) { --density-columns: 3; }
+.posts:not(:has(> .post:nth-child(5))) { --density-columns: 2; max-width: 1440px; }
+.posts:has(> .post:only-child) { --density-columns: 1; max-width: 1040px; }
+/* A pair needs an explicit row: column balancing can stack unequal-height cards.
+   This rule stops matching as soon as a third post joins the masonry wall. */
+@media (min-width: 601px) {
+  .posts:has(> .post:nth-child(2):last-child) {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    align-items: start;
+  }
+}
+.post { break-inside: avoid; display: inline-block; width: 100%; margin-bottom: 22px; border-radius: 24px; background: var(--surface-1); overflow: hidden; border: 1px solid var(--border); transition: border-color .18s, box-shadow .18s; }
+.post:hover { border-color: var(--border-mid); box-shadow: var(--shadow-sm); }
+.image { background: var(--surface-2); position: relative; overflow: hidden; }
+.image img { display: block; width: 100%; height: auto; }
+.image[data-loaded="true"] img { animation: imageReveal .28s ease-out; }
+.imageSkeleton { width: 100%; min-height: 240px; background: var(--surface-2); animation: breathe 1.8s ease-in-out infinite; }
+.imageFailure { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 12px; min-height: 220px; padding: 24px; text-align: center; }
+.imageFailure svg { color: var(--accent); }
+.postBody { display: grid; grid-template-columns: minmax(0, 1fr); gap: 14px; padding: 18px; }
+.caption { color: var(--fg); font-size: 17px; font-weight: 650; line-height: 1.45; letter-spacing: -.025em; white-space: pre-wrap; overflow-wrap: anywhere; }
+.timestamp { color: var(--muted); font-size: 12px; }
+.state { border-radius: 28px; background: var(--surface-1); padding: clamp(24px, 5vw, 56px); display: flex; flex-direction: column; align-items: flex-start; gap: 16px; }
+.state h2 { font-size: 26px; }
+.skeleton { width: 100%; height: 320px; background: var(--surface-2); animation: breathe 1.8s ease-in-out infinite; border-radius: 24px; }
+.skeleton:nth-child(2n) { height: 420px; }
+.pagination { display: flex; align-items: center; justify-content: center; gap: 16px; margin-top: 24px; flex-wrap: wrap; }
+.pagination span { color: var(--muted); font-size: 14px; }
+@keyframes imageReveal { from { opacity: 0; } to { opacity: 1; } }
+@keyframes breathe { 50% { opacity: .55; } }
+@media (max-width: 1450px) { .posts { --viewport-columns: 3; } }
+@media (max-width: 1080px) { .posts { --viewport-columns: 2; column-gap: 18px; } }
+@media (max-width: 600px) {
+  .posts { --viewport-columns: 1; }
+  .shell { width: calc(100% - 28px); }
+  .heading { padding: 14px 0 20px; }
+  .heading h1 { font-size: 34px; }
+  .postBody { padding: 18px; }
+  .header { gap: 10px; }
+  .navigation { gap: 8px; }
+}

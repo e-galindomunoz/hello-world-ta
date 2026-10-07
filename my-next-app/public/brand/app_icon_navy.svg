@@ -1,0 +1,56 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="100%" height="100%">
+  <defs>
+    <linearGradient id="bgGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#15172C" />
+      <stop offset="100%" stop-color="#080914" />
+    </linearGradient>
+    <linearGradient id="appLilac" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#E6B8FF" />
+      <stop offset="50%" stop-color="#BD83FF" />
+      <stop offset="100%" stop-color="#7B7BFF" />
+    </linearGradient>
+    <linearGradient id="borderGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="rgba(255,255,255,0.18)" />
+      <stop offset="100%" stop-color="rgba(255,255,255,0.02)" />
+    </linearGradient>
+  </defs>
+
+  <!-- iOS-style Squircle background -->
+  <rect x="16" y="16" width="480" height="480" rx="108" fill="url(#bgGrad)" stroke="url(#borderGrad)" stroke-width="4" />
+
+  <g transform="translate(0, 0) rotate(-3 256 256)">
+    <!-- Top-Left Corner Bracket -->
+    <path d="M 125 215 L 125 152 C 125 132 141 116 161 116 L 226 116" 
+          fill="none" stroke="url(#appLilac)" stroke-width="36" stroke-linecap="round" stroke-linejoin="round" />
+    
+    <!-- Top-Right Corner -->
+    <path d="M 298 116 L 351 116 C 371 116 387 132 387 152 L 387 200" 
+          fill="none" stroke="url(#appLilac)" stroke-width="36" stroke-linecap="round" stroke-linejoin="round" />
+    <circle cx="382" cy="122" r="13" fill="url(#appLilac)" />
+
+    <!-- Bottom-Left Corner Bracket -->
+    <path d="M 125 290 L 125 360 C 125 380 141 396 161 396 L 226 396" 
+          fill="none" stroke="url(#appLilac)" stroke-width="36" stroke-linecap="round" stroke-linejoin="round" />
+
+    <!-- Bottom-Right Corner Bracket -->
+    <path d="M 324 396 L 351 396 C 371 396 387 380 387 360 L 387 290" 
+          fill="none" stroke="url(#appLilac)" stroke-width="36" stroke-linecap="round" stroke-linejoin="round" />
+
+    <!-- Wink Eye -->
+    <path d="M 175 228 C 185 208 215 208 225 228" 
+          fill="none" stroke="url(#appLilac)" stroke-width="30" stroke-linecap="round" />
+
+    <!-- Round Camera Lens Eye -->
+    <circle cx="295" cy="222" r="32" fill="none" stroke="url(#appLilac)" stroke-width="26" />
+    <circle cx="295" cy="222" r="10" fill="url(#appLilac)" />
+
+    <!-- Grin -->
+    <path d="M 178 285 C 220 330 292 325 334 280" 
+          fill="none" stroke="url(#appLilac)" stroke-width="28" stroke-linecap="round" />
+
+    <!-- Tongue -->
+    <path d="M 236 308 C 236 348 246 372 262 372 C 278 372 288 348 288 304 Z" 
+          fill="url(#appLilac)" stroke="url(#appLilac)" stroke-width="6" stroke-linejoin="round" />
+    <line x1="262" y1="318" x2="262" y2="352" stroke="#0D0E1D" stroke-width="6" stroke-linecap="round" />
+  </g>
+</svg>

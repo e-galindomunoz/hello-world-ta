@@ -9,9 +9,9 @@ export default async function FeedLayout({ children }: { children: React.ReactNo
   const user = await getUser();
   const content = <>
     <div className={styles.heading}>
-      <span className="eyebrow">A LITTLE EVERYDAY GOOFY</span>
-      <h1>The feed<span className="brand-dot">.</span></h1>
-      <p>Fresh photos. Funny captions. Find your next laugh.</p>
+      <span className="eyebrow">The feed</span>
+      <h1>The internet needed this<span className="brand-dot">.</span></h1>
+      <p>Little moments. Questionable captions. Your call.</p>
     </div>
     {children}
   </>;
@@ -23,7 +23,7 @@ export default async function FeedLayout({ children }: { children: React.ReactNo
     <header className={styles.header}>
       <Link href="/" className="wordmark"><BrandMark /><span>LetsBeGoofy<span className="brand-dot">.</span></span></Link>
       <nav className={styles.navigation} aria-label="Feed navigation">
-        <Link className="button secondary" href="/dashboard">Create a post</Link>
+        <Link className="button secondary" href="/dashboard">Create</Link>
         <ThemeToggle />
       </nav>
     </header>

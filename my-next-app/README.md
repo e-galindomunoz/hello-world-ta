@@ -1,24 +1,81 @@
-# Coffee Collection
+# LetsBeGoofy
 
-The app started as a Hello World page, then added a table displaying coffee records from Supabase. It now includes Google sign-in, a protected dashboard, and a homepage that changes based on whether the user is signed in.
+Drop a photo, get a funny AI caption, and let the public feed react.
+Signed-in users upload a photo, Google Gemini writes a caption in their sense of
+humor, and the post goes to a public feed where other users vote on it.
 
-The dashboard displays the coffee table's `id`, `created_at`, `roast`, and `bestif` columns. Signed-in users can view the table and sign out.
+## Stack
 
-## Authentication flow
+- Next.js (App Router, Server Actions) on Vercel
+- Supabase Auth (Google OAuth), Postgres with RLS, and Storage
+- Google Gemini via `@google/genai` (server-side only)
+- `heic-to` for in-browser HEIC/HEIF conversion
 
-1. A signed-out visitor sees the homepage gate and follows the sign-in link.
-2. The Google sign-in button calls Supabase `signInWithOAuth` with the Google provider and the current origin’s `/auth/callback` as `redirectTo`. The `@supabase/ssr` browser client uses PKCE and stores the verifier in cookies.
-3. Supabase manages the Google OAuth flow and redirects back to `/auth/callback?code=…`.
-4. The callback reads `code` and calls `exchangeCodeForSession(code)` using the existing `@supabase/ssr` server client. Failed or cancelled sign-ins display an error without redirecting to the dashboard.
-5. `@supabase/ssr` saves the session in cookies, and the user is sent to `/dashboard`.
-6. Before fetching or displaying coffee records, the dashboard verifies the user through Supabase. Visitors without a valid session are redirected to `/login`.
-7. The proxy refreshes session cookies as needed. Signing out ends the current session and returns the user to the homepage gate.
+## Features
 
-## Google OAuth configuration
+- **Google sign-in.** Protected `/dashboard` and `/dashboard/profile`; the public
+  `/feed` works signed out.
+- **Create.** Upload a photo privately, then generate and publish a caption.
+  One successful generation per user per America/New_York day, enforced by the
+  database. The exact prompt sent to Gemini is stored with the generation.
+- **Humor learning.** An optional humor preference (500 characters max) and
+  private "That's so me" / "Not my humor" feedback on your own captions shape
+  later prompts.
+- **Public feed.** New and Hot sorting, pagination, a masonry layout, and
+  up/down voting with public aggregate scores. Raw votes and prompts stay private.
+- **Profile.** Name, avatar, and humor preference.
+- **iPhone photos.** HEIC/HEIF is converted to JPEG on the device before preview
+  or upload (see below).
 
-- Enable Google in Supabase Authentication providers and configure the Google client ID and secret there.
-- In Google Cloud, authorize the Supabase provider callback URL shown in the Supabase dashboard (typically `https://<project-ref>.supabase.co/auth/v1/callback`).
-- In Supabase Authentication URL Configuration, allow each application callback URL, including `http://localhost:3000/auth/callback` for local development and your deployed origin followed by `/auth/callback`.
-- The frontend only needs the Supabase URL and public key from `.env.example`.
+## Local setup
 
-See [Supabase’s Google OAuth guide](https://supabase.com/docs/guides/auth/social-login/auth-google).
+```bash
+npm install
+cp .env.example .env.local   # then fill in the values
+npm run dev
+```
+
+| Variable | Notes |
+|---|---|
+| `NEXT_PUBLIC_SUPABASE_URL` | Supabase project URL |
+| `NEXT_PUBLIC_SUPABASE_ANON_KEY` or `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` | Public client key |
+| `GEMINI_API_KEY` | Server-only. Never prefix it with `NEXT_PUBLIC_` |
+
+No Supabase service-role key is used.
+
+Checks: `npm run lint`, `npx tsc --noEmit`, `node --test tests/*.test.mjs`,
+`npm run build`.
+
+## Supabase setup
+
+Tables, RLS policies, grants, RPCs (`get_public_feed`,
+`get_daily_generation_status`), triggers, and Storage buckets/policies are
+**managed manually in the Supabase dashboard / SQL Editor**. The app never runs
+migrations. Reference SQL is in `supabase/`, and the full database and security
+model is in `CODEX_HANDOFF.md`.
+
+Google OAuth:
+
+- Enable the Google provider in Supabase and add its client ID and secret there.
+- In Google Cloud, authorize the Supabase callback
+  (`https://<project-ref>.supabase.co/auth/v1/callback`).
+- In Supabase Auth → URL Configuration, set the Site URL and allow
+  `<origin>/auth/callback` for each origin (`http://localhost:3000` locally plus
+  the production domain).
+
+## iPhone photo uploads
+
+Generation photos and avatars share `lib/image-upload.ts`. HEIC/HEIF becomes a
+full-resolution JPEG (quality 0.9) with orientation baked in and source metadata
+(including GPS) dropped. JPEG, PNG, and WebP pass through unchanged. Pending or
+failed conversion blocks upload.
+
+Size limits apply to the prepared file:
+
+- **Generation photos: 5 MiB.** These upload directly from the browser to Storage.
+- **Avatars: 4 MiB.** These go through a Server Action, and Vercel rejects
+  request bodies above ~4.5 MB. The limit is enforced in the picker and again
+  on the server.
+
+Oversized files get a clear message; nothing is silently downscaled. Automated
+tests mock the decoder. The real-device checklist is in `CODEX_HANDOFF.md`.

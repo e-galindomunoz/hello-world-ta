@@ -13,8 +13,12 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "LetsBeGoofy — Your personal space",
-  description: "A home for your favorite finds and a profile that feels like you.",
+  title: "LetsBeGoofy — Drop the evidence.",
+  description: "Something happened. Drop the photo, find the caption, let the feed react.",
+  icons: {
+    icon: [{ url: "/brand/favicon.svg", type: "image/svg+xml" }, { url: "/brand/favicon_32x32.png", sizes: "32x32", type: "image/png" }],
+    apple: [{ url: "/brand/apple-touch-icon.png", sizes: "180x180", type: "image/png" }],
+  },
 };
 
 export default function RootLayout({ children }: LayoutProps<"/">) {

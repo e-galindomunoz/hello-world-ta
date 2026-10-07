@@ -1,0 +1,21 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="100%" height="100%">
+  <defs>
+    <linearGradient id="favGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#E8BCFF" />
+      <stop offset="100%" stop-color="#8070FF" />
+    </linearGradient>
+  </defs>
+  <!-- Frame Brackets -->
+  <path d="M 115 200 L 115 145 C 115 120 135 100 160 100 L 215 100" fill="none" stroke="url(#favGrad)" stroke-width="48" stroke-linecap="round" stroke-linejoin="round" />
+  <path d="M 297 100 L 352 100 C 377 100 397 120 397 145 L 397 200" fill="none" stroke="url(#favGrad)" stroke-width="48" stroke-linecap="round" stroke-linejoin="round" />
+  <path d="M 115 312 L 115 367 C 115 392 135 412 160 412 L 215 412" fill="none" stroke="url(#favGrad)" stroke-width="48" stroke-linecap="round" stroke-linejoin="round" />
+  <path d="M 297 412 L 352 412 C 377 412 397 392 397 367 L 397 312" fill="none" stroke="url(#favGrad)" stroke-width="48" stroke-linecap="round" stroke-linejoin="round" />
+  
+  <!-- Wink & Eye -->
+  <path d="M 175 220 C 185 200 215 200 225 220" fill="none" stroke="url(#favGrad)" stroke-width="40" stroke-linecap="round" />
+  <circle cx="295" cy="215" r="26" fill="url(#favGrad)" />
+  
+  <!-- Smile & Tongue -->
+  <path d="M 175 285 C 220 335 290 330 335 280" fill="none" stroke="url(#favGrad)" stroke-width="38" stroke-linecap="round" />
+  <path d="M 235 305 C 235 352 245 378 262 378 C 279 378 289 352 289 302 Z" fill="url(#favGrad)" />
+</svg>

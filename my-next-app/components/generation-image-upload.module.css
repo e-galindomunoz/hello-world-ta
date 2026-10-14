@@ -72,3 +72,5 @@
   .uploadFrame { min-height: 280px; }
   .reveal > :global(.button) { width: 100%; }
 }
+
+.retryOffer { display: grid; justify-items: start; gap: 10px; }

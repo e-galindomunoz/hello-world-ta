@@ -389,3 +389,46 @@ Avatar flow (/dashboard/profile):
 Regression: JPEG/PNG/WebP still upload unchanged in both flows; a corrupt HEIC
 shows the conversion error and uploads nothing; a converted JPEG > 5 MiB
 (generation) or > 4 MiB (avatar) is rejected with the size message.
+
+## Creator caption retry
+
+The user reports the reviewed creator-caption-retry migration was applied manually
+in Supabase. Application integration is implemented; no deployment performed.
+
+- Generation starts at caption_attempt=1. Confirmed negative creator feedback
+  reveals “Aight, one more shot?” / “Run it back”; no automatic Gemini request.
+- retryCaption authenticates, reads get_creator_caption_state, validates/downloads
+  the stored image under owner Storage protections, loads preference/history,
+  calls Gemini once, and invokes commit_caption_retry with the exact prompt.
+- Retry never inserts a generation or calls daily allowance helpers. The applied
+  RPC locks/checks ownership, attempt 1, negative feedback, and zero vote rows;
+  its vote-insert locking trigger handles concurrent votes. Only caption, prompt,
+  and attempt change. Feed identity, image, timestamp and sorting stay unchanged.
+- submitCreatorFeedback uses set_creator_caption_feedback with desired rating and
+  an expected-attempt stale-view guard. The database derives the actual caption
+  snapshot/current attempt. Historical attempt-1 feedback remains intact.
+- Shared learning reads caption_snapshot, latest 10 rows, at most 3 liked / 2
+  disliked, best-effort. ONLY retry filters out the current generation before
+  LIMIT. Its rejected caption is included explicitly once in the retry context;
+  future different generations can still learn from both attempts.
+- Prompt examples retain the 300-character cap and JSON encoding. Retry asks for
+  a different comedic angle, treats context as untrusted data, and prohibits
+  quoting/revealing preference, history, or rejected caption.
+- UI replaces only confirmed captions, resets feedback at attempt 2, and never
+  offers a third attempt. Uncertain saves/stale feedback lock mutations until
+  “Check caption” reconciles owner state without another Gemini request.
+- Existing dashboard full-reload behavior remains: it does not restore a prior
+  result. Recovery is in-place while the result component remains mounted.
+- Concurrent requests may both reach Gemini; the database permits only one
+  replacement commit. This is not a global provider-call reservation system.
+
+Local tests mock database/provider boundaries. Live checks remain required:
+owner/non-owner/anon RPC permissions, direct mutation denial, two-session
+vote/retry and retry/retry races, snapshot backfill and learning, unchanged daily
+usage/feed identity/created_at, private prompts/raw votes/feedback, and real
+Gemini + mobile reveal/recovery behavior. No live DB/provider validation claimed.
+
+Validation for this implementation: npm run lint, npx next typegen,
+npx tsc --noEmit, node --test tests/*.test.mjs (32 passed), git diff --check,
+and npm run build all passed. The sandboxed build stalled during compilation;
+the approved run outside the sandbox completed successfully.

@@ -166,6 +166,7 @@ const ready = { state: 'ready', used: false, resetsAt: '2026-10-08T04:00:00Z' };
 function createHarness(status = ready, prepare = async file => file, imageUpload) {
   const generation = deferred();
   const feedback = [];
+  const retries = [];
   const calls = [];
   const uploads = [];
   const view = mount('components/generation-image-upload.tsx', 'GenerationImageUpload', { initialDailyStatus: status }, {
@@ -174,15 +175,16 @@ function createHarness(status = ready, prepare = async file => file, imageUpload
       checkGenerationAvailability: async () => ready,
       generateCaption: () => generation.promise,
     },
-    '@/app/dashboard/feedback-actions': { submitCreatorFeedback(id, rating) {
-      const response = deferred(); calls.push({ id, rating }); feedback.push(response); return response.promise;
+    '@/app/dashboard/retry-actions': { retryCaption() { const response = deferred(); retries.push(response); return response.promise; }, refreshCreatorCaption: async () => ({ ok: false, message: 'Check again.' }) },
+    '@/app/dashboard/feedback-actions': { submitCreatorFeedback(id, rating, attempt) {
+      const response = deferred(); calls.push({ id, rating, attempt }); feedback.push(response); return response.promise;
     } },
     '@/lib/supabase/client': { createClient: () => ({
       auth: { getUser: async () => ({ data: { user: { id: 'creator' } } }) },
       storage: { from: () => ({ upload: async (path, file, options) => { uploads.push({ path, file, options }); return { data: { path } }; } }) },
     }) },
   });
-  return { view, generation, feedback, calls, uploads };
+  return { view, generation, feedback, calls, uploads, retries };
 }
 async function reachGenerating(view) {
   await find(view.render(), n => n.type === 'input').props.onChange({ currentTarget: { files: [{ type: 'image/png', size: 100, name: 'photo.png' }], value: 'photo.png' } });
@@ -200,7 +202,7 @@ test('create presents ready, preview, generating, and confirmed reveal scenes', 
   assert.equal(view.render().props['data-scene'], 'generating');
   assert.match(text(view.render()), /Bet, let’s cook sum up frs/);
   assert.doesNotMatch(text(view.render()), /Caption & post|Choose a different/);
-  generation.resolve({ ok: true, generation: { id: 'made-1', caption: 'A confirmed caption.' }, dailyStatus: { ...ready, used: true } });
+  generation.resolve({ ok: true, generation: { id: 'made-1', caption: 'A confirmed caption.', captionAttempt: 1 }, dailyStatus: { ...ready, used: true } });
   await view.settle();
   assert.equal(view.render().props['data-scene'], 'result');
   assert.match(text(view.render()), /A confirmed caption/);
@@ -211,9 +213,9 @@ test('create presents ready, preview, generating, and confirmed reveal scenes', 
 test('private feedback confirms like, switch, clear and locks after an uncertain save', async () => {
   const { view, generation, feedback, calls } = createHarness();
   await reachGenerating(view);
-  generation.resolve({ ok: true, generation: { id: 'made-1', caption: 'Caption.' } });
+  generation.resolve({ ok: true, generation: { id: 'made-1', caption: 'Caption.', captionAttempt: 1 } });
   await view.settle();
-  for (const [label, rating] of [['That’s so me', 1], ['Not my humor', -1], ['Not my humor', null]]) {
+  for (const [label, rating] of [['That’s so me', 1], ['Mmm not my thing', -1], ['Mmm not my thing', null]]) {
     const previous = button(view.render(), label).props['aria-pressed'];
     button(view.render(), label).props.onClick();
     assert.equal(calls.at(-1).rating, rating);
@@ -386,4 +388,50 @@ test('avatar runs the shared helper: HEIC saves as converted JPEG, PNG passes th
   await find(generation.view.render(), n => n.type === 'input').props.onChange({ currentTarget: { files: [big], value: 'big.png' } });
   await button(generation.view.render(), 'Upload this one').props.onClick();
   assert.equal(generation.uploads[0].file, big);
+});
+
+
+test('retry is explicit, keeps the old caption pending, resets feedback and never offers attempt three', async () => {
+  const { view, generation, feedback, calls, retries } = createHarness();
+  await reachGenerating(view);
+  generation.resolve({ ok: true, generation: { id: 'made-1', caption: 'Original.', captionAttempt: 1 }, dailyStatus: { ...ready, used: true } });
+  await view.settle();
+  button(view.render(), 'Mmm not my thing').props.onClick();
+  assert.doesNotMatch(text(view.render()), /Run it back/);
+  feedback.at(-1).resolve({ ok: true, rating: -1 }); await view.settle();
+  assert.equal(retries.length, 0);
+  button(view.render(), 'Run it back').props.onClick();
+  button(view.render(), 'Run it back').props.onClick();
+  assert.equal(retries.length, 1);
+  assert.match(text(view.render()), /Original/);
+  assert.match(text(view.render()), /cook again/);
+  assert.equal(button(view.render(), 'Mmm not my thing').props.disabled, true);
+  retries[0].resolve({ ok: true, generation: { id: 'made-1', caption: 'Replacement.', captionAttempt: 2, rating: null, retryAvailable: false } });
+  await view.settle();
+  assert.match(text(view.render()), /Replacement/);
+  assert.doesNotMatch(text(view.render()), /Original|Run it back/);
+  assert.equal(button(view.render(), 'Mmm not my thing').props['aria-pressed'], false);
+  button(view.render(), 'Mmm not my thing').props.onClick();
+  assert.equal(calls.at(-1).attempt, 2);
+  feedback.at(-1).resolve({ ok: true, rating: -1 }); await view.settle();
+  assert.doesNotMatch(text(view.render()), /Run it back/);
+});
+
+test('rejected or uncertain retry keeps original caption and requires state recovery', async () => {
+  for (const code of ['retry_not_available', 'uncertain']) {
+    const { view, generation, feedback, retries } = createHarness();
+    await reachGenerating(view);
+    generation.resolve({ ok: true, generation: { id: 'made-1', caption: 'Keep original.', captionAttempt: 1 } });
+    await view.settle();
+    button(view.render(), 'Mmm not my thing').props.onClick();
+    feedback.at(-1).resolve({ ok: true, rating: -1 }); await view.settle();
+    button(view.render(), 'Run it back').props.onClick();
+    retries[0].resolve({ ok: false, code, message: 'Cannot replace.' }); await view.settle();
+    assert.match(text(view.render()), /Keep original/);
+    assert.doesNotMatch(text(view.render()), /Run it back/);
+    assert.equal(button(view.render(), 'That’s so me').props.disabled, true);
+    button(view.render(), 'Check caption').props.onClick(); await view.settle();
+    assert.equal(retries.length, 1);
+    assert.equal(button(view.render(), 'That’s so me').props.disabled, true);
+  }
 });

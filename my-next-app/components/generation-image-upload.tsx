@@ -1,5 +1,6 @@
 "use client";
 
+import { retryCaption, refreshCreatorCaption, type CreatorCaptionState } from "@/app/dashboard/retry-actions";
 import Link from "next/link";
 import { useEffect, useRef, useState, useTransition } from "react";
 import { checkGenerationAvailability, generateCaption } from "@/app/dashboard/generation-actions";
@@ -32,7 +33,7 @@ export function GenerationImageUpload({ initialDailyStatus }: { initialDailyStat
   const [error, setError] = useState("");
   const [uploadedPath, setUploadedPath] = useState<string | null>(null);
   const [generationPending, startGeneration] = useTransition();
-  const [generation, setGeneration] = useState<{ id: string; caption: string } | null>(null);
+  const [generation, setGeneration] = useState<{ id: string; caption: string; captionAttempt: 1 | 2 } | null>(null);
   const feedbackSubmitting = useRef(false);
   const [confirmedRating, setConfirmedRating] = useState<FeedbackRating>(null);
   const [feedbackNeedsReload, setFeedbackNeedsReload] = useState(false);
@@ -40,7 +41,55 @@ export function GenerationImageUpload({ initialDailyStatus }: { initialDailyStat
   const [feedbackMessage, setFeedbackMessage] = useState("");
   const [feedbackPending, startFeedback] = useTransition();
 
-  const busy = preparing || pending || generationPending;
+  const retrying = useRef(false);
+  const [retryPending, startRetry] = useTransition();
+  const [retryBlocked, setRetryBlocked] = useState(false);
+  const [retryMessage, setRetryMessage] = useState("");
+
+  function applyCaptionState(state: CreatorCaptionState) {
+    setGeneration(state);
+    setConfirmedRating(state.rating);
+    setRetryBlocked(!state.retryAvailable);
+    setFeedbackNeedsReload(false);
+    setFeedbackError("");
+    setFeedbackMessage("");
+  }
+
+  function refreshCaption() {
+    if (!generation || retrying.current || feedbackSubmitting.current) return;
+    retrying.current = true;
+    startRetry(async () => {
+      try {
+        const result = await refreshCreatorCaption(generation.id);
+        if (result.ok) { applyCaptionState(result.generation); setRetryMessage(""); }
+        else setRetryMessage(result.message);
+      } catch { setRetryMessage("Couldn’t check your caption. Try checking again."); }
+      finally { retrying.current = false; }
+    });
+  }
+
+  function runItBack() {
+    if (!generation || generation.captionAttempt !== 1 || confirmedRating !== -1
+      || retryBlocked || retrying.current || feedbackSubmitting.current || feedbackNeedsReload) return;
+    retrying.current = true;
+    setRetryMessage("");
+    startRetry(async () => {
+      try {
+        const result = await retryCaption(generation.id);
+        if (result.ok) applyCaptionState(result.generation);
+        else {
+          setRetryMessage(result.message);
+          if (result.code === "retry_not_available") setRetryBlocked(true);
+          if (result.code === "uncertain" || result.code === "retry_not_available") setFeedbackNeedsReload(true);
+        }
+      } catch {
+        setFeedbackNeedsReload(true);
+        setRetryMessage("Couldn’t confirm that shot. Check your caption before trying again.");
+      } finally { retrying.current = false; }
+    });
+  }
+
+  const busy = preparing || pending || generationPending || retryPending;
   const available = dailyStatus.state === "ready" && !dailyStatus.used;
   const resetLabel = dailyStatus.state === "ready" ? new Intl.DateTimeFormat("en-US", {
     timeZone: "America/New_York", month: "short", day: "numeric", year: "numeric",
@@ -126,7 +175,15 @@ export function GenerationImageUpload({ initialDailyStatus }: { initialDailyStat
       try {
         const result = await generateCaption(uploadedPath);
         if (result.dailyStatus) setDailyStatus(result.dailyStatus);
-        if (result.ok) setGeneration(result.generation);
+        if (result.ok) {
+          setGeneration(result.generation);
+          setConfirmedRating(null);
+          setFeedbackNeedsReload(false);
+          setRetryBlocked(false);
+          setRetryMessage("");
+          setFeedbackError("");
+          setFeedbackMessage("");
+        }
         else setError(result.message);
       } catch {
         setDailyStatus({ state: "unknown" });
@@ -138,7 +195,7 @@ export function GenerationImageUpload({ initialDailyStatus }: { initialDailyStat
   }
 
   function submitFeedback(value: 1 | -1) {
-    if (!generation || feedbackSubmitting.current || feedbackNeedsReload) return;
+    if (!generation || feedbackSubmitting.current || feedbackNeedsReload || retrying.current) return;
     const generationId = generation.id;
     const desiredRating: FeedbackRating = confirmedRating === value ? null : value;
     feedbackSubmitting.current = true;
@@ -146,19 +203,20 @@ export function GenerationImageUpload({ initialDailyStatus }: { initialDailyStat
     setFeedbackMessage("");
     startFeedback(async () => {
       try {
-        const result = await submitCreatorFeedback(generationId, desiredRating);
+        const result = await submitCreatorFeedback(generationId, desiredRating, generation.captionAttempt);
         if (result.ok) {
           setConfirmedRating(result.rating);
+          setRetryBlocked(false);
           setFeedbackMessage(
             result.rating === null ? "Feedback cleared." :
             result.rating === 1 ? "Noted — it nailed it." : "Got it — not your vibe.",
           );
         } else {
           setFeedbackError(result.message);
-          if (result.code === "uncertain") setFeedbackNeedsReload(true);
+          if ((result.code === "uncertain" || result.code === "stale")) setFeedbackNeedsReload(true);
         }
       } catch {
-        setFeedbackError("Saving could not be confirmed. Reload before trying again.");
+        setFeedbackError("Saving could not be confirmed. Check your caption before trying again.");
         setFeedbackNeedsReload(true);
       } finally {
         feedbackSubmitting.current = false;
@@ -174,7 +232,7 @@ export function GenerationImageUpload({ initialDailyStatus }: { initialDailyStat
       <header className={styles.heading}>
         <span className="eyebrow">{generation ? "Fresh out of the kitchen" : exhausted ? "See you tomorrow" : "Drop the evidence"}</span>
         <h1 id="generation-upload-heading">
-          {generation ? "Aight so... this what we did. Thoughts?" : generationPending ? "Bet, let’s cook sum up frs." : exhausted ? "That’s enough foolishness for today." : "Aight, what do you have for us today?"}
+          {retryPending ? "Bet, let me cook again frs." : generation ? "Aight so... this what we did. Thoughts?" : generationPending ? "Bet, let’s cook sum up frs." : exhausted ? "That’s enough foolishness for today." : "Aight, what do you have for us today?"}
         </h1>
         {!selection && !exhausted && <p>Something happened. We need the photo.</p>}
       </header>
@@ -223,7 +281,7 @@ export function GenerationImageUpload({ initialDailyStatus }: { initialDailyStat
               </figure>
 
               {generation ? (
-                <div className={styles.reveal}>
+                <div className={styles.reveal} key={`${generation.id}:${generation.captionAttempt}`}>
                   <span className={styles.published}><Icon name="check" /> Out in the wild</span>
                   <p className={styles.caption}>{generation.caption}</p>
                   <div className={styles.feedback}>
@@ -232,18 +290,25 @@ export function GenerationImageUpload({ initialDailyStatus }: { initialDailyStat
                     <div className={styles.feedbackChoices} role="group" aria-label="Private creator feedback" aria-busy={feedbackPending}>
                       {([1, -1] as const).map((value) => (
                         <button key={value} type="button" className={styles.feedbackChoice}
-                          disabled={feedbackPending || feedbackNeedsReload}
+                          disabled={feedbackPending || feedbackNeedsReload || retryPending}
                           aria-pressed={feedbackNeedsReload ? undefined : confirmedRating === value}
                           onClick={() => submitFeedback(value)}>
                           <span aria-hidden="true">{value === 1 ? "✦" : "∿"}</span>
-                          {value === 1 ? "That’s so me" : "Not my humor"}
+                          {value === 1 ? "That’s so me" : "Mmm not my thing"}
                         </button>
                       ))}
                     </div>
                     <p className={styles.note}>Private feedback. Tap your selection again to clear it.</p>
                     <p role="status" aria-live="polite" aria-atomic="true" className={styles.status}>{feedbackPending ? "Saving…" : feedbackMessage}</p>
                     {feedbackError && <p role="alert" className={styles.error}>{feedbackError}</p>}
-                    {feedbackNeedsReload && <a className={styles.textButton} href="/dashboard">Reload</a>}
+                    {feedbackNeedsReload && <button type="button" className={styles.textButton} disabled={retryPending} onClick={refreshCaption}>Check caption</button>}
+                    {generation.captionAttempt === 1 && confirmedRating === -1 && !retryBlocked && !feedbackNeedsReload && (
+                      <div className={styles.retryOffer}>
+                        <p>Aight, one more shot?</p>
+                        <button type="button" className="button secondary" disabled={retryPending || feedbackPending} onClick={runItBack}>Run it back</button>
+                      </div>
+                    )}
+                    <p role="status" aria-live="polite" className={styles.status}>{retryPending ? "Bet, let me cook again frs." : retryMessage}</p>
                   </div>
                   <Link className="button" href="/feed">See it in the feed <Icon name="arrow" /></Link>
                 </div>

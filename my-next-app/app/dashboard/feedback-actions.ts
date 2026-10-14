@@ -6,16 +6,18 @@ import { isGenerationId } from "@/lib/supabase/feed-images";
 export type FeedbackRating = 1 | -1 | null;
 
 type FeedbackResult =
-  | { ok: true; rating: FeedbackRating }
-  | { ok: false; code: "auth" | "invalid" | "uncertain" | "unavailable"; message: string };
+  | { ok: true; rating: FeedbackRating; captionAttempt: 1 | 2 }
+  | { ok: false; code: "auth" | "invalid" | "uncertain" | "unavailable" | "stale"; message: string };
 
 export async function submitCreatorFeedback(
   generationId: unknown,
   rating: unknown,
+  expectedAttempt: unknown,
 ): Promise<FeedbackResult> {
   if (
     typeof generationId !== "string" ||
     !isGenerationId(generationId) ||
+    (expectedAttempt !== 1 && expectedAttempt !== 2) ||
     (rating !== 1 && rating !== -1 && rating !== null)
   ) {
     return { ok: false, code: "invalid", message: "Invalid feedback. Reload and try again." };
@@ -32,48 +34,25 @@ export async function submitCreatorFeedback(
       return { ok: false, code: "auth", message: "Sign in to leave feedback." };
     }
 
-    if (rating === null) {
-      writing = true;
-      const { error } = await supabase
-        .from("creator_feedback")
-        .delete()
-        .eq("generation_id", generationId)
-        .eq("user_id", user.id);
-      if (error) throw new Error("Feedback removal was not confirmed.");
-      return { ok: true, rating: null };
-    }
-
-    // INSERT first; on duplicate key (23505) retry as UPDATE on rating only.
-    // The column-level grant permits UPDATE on rating only; updated_at is
-    // maintained by the database trigger and must not appear in this payload.
     writing = true;
-    let result = await supabase
-      .from("creator_feedback")
-      .insert({ generation_id: generationId, user_id: user.id, rating })
-      .select("generation_id, rating")
-      .single();
-
-    if (result.error?.code === "23505") {
-      result = await supabase
-        .from("creator_feedback")
-        .update({ rating })
-        .eq("generation_id", generationId)
-        .eq("user_id", user.id)
-        .select("generation_id, rating")
-        .single();
+    const { data, error } = await supabase.rpc("set_creator_caption_feedback", {
+      p_generation_id: generationId,
+      p_expected_attempt: expectedAttempt,
+      p_rating: rating,
+    });
+    if (error?.message === "caption_attempt_changed") {
+      return { ok: false, code: "stale", message: "Your caption changed. Check it before leaving feedback." };
     }
-
-    const { data, error } = result;
-    if (error || !data || data.rating !== rating) {
+    if (error || !data || data.rating !== rating || data.caption_attempt !== expectedAttempt) {
       throw new Error("Feedback save was not confirmed.");
     }
-    return { ok: true, rating };
+    return { ok: true, rating, captionAttempt: expectedAttempt };
   } catch {
     return writing
       ? {
           ok: false,
           code: "uncertain",
-          message: "Saving could not be confirmed. Reload before trying again.",
+          message: "Saving could not be confirmed. Check your caption before trying again.",
         }
       : {
           ok: false,
